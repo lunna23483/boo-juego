@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Casa Embrujada · Escape Room</title>
+<style>
+:root{color-scheme:dark;--bg:#0d0a14;--panel:#1a1426;--tx:#eee6d8;--ac:#ff8a1f;--mut:#9a8fb0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:Georgia,'Times New Roman',serif;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+header{width:100%;max-width:640px;display:flex;justify-content:space-between;padding:12px 16px;font-size:18px}
+#timer{color:var(--ac);font-variant-numeric:tabular-nums}
+#stage{position:relative;width:calc(100% - 24px);max-width:640px;aspect-ratio:4/3;border-radius:14px;border:2px solid #2d2340;overflow:hidden;transition:background .6s}
+.spot{position:absolute;transform:translate(-50%,-50%);background:none;border:0;font-size:clamp(36px,10vw,56px);cursor:pointer;filter:drop-shadow(0 0 8px #000);animation:fl 3s ease-in-out infinite}
+.spot small{display:block;font:12px Georgia,serif;color:var(--mut)}
+.spot:hover,.spot:focus{filter:drop-shadow(0 0 12px var(--ac));outline:0}
+@keyframes fl{50%{transform:translate(-50%,-54%)}}
+#room{position:absolute;left:12px;top:8px;color:var(--mut);font-style:italic}
+#inv{width:calc(100% - 24px);max-width:640px;margin:10px 0;padding:10px 14px;background:var(--panel);border-radius:12px;min-height:50px;font-size:28px}
+#inv span{font-size:14px;color:var(--mut);margin-right:8px}
+#msg{width:calc(100% - 24px);max-width:640px;padding:10px 14px;color:var(--mut);min-height:48px}
+#dlg{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+#dlg>div{background:var(--panel);border:1px solid var(--ac);border-radius:14px;padding:20px;max-width:380px;width:100%;text-align:center;line-height:1.5}
+button.b{background:var(--ac);color:#1a0d00;border:0;border-radius:8px;padding:10px 18px;font:bold 16px Georgia,serif;margin:6px 4px 0;cursor:pointer}
+input{width:120px;font:28px monospace;text-align:center;background:#0d0a14;color:var(--tx);border:1px solid var(--ac);border-radius:8px;padding:6px;letter-spacing:6px}
+.moon{font-size:44px;background:#0d0a14;border:1px solid var(--mut);border-radius:10px;margin:4px;padding:6px 10px;cursor:pointer}
+#scare{position:fixed;inset:0;background:#000;display:none;align-items:center;justify-content:center;font-size:40vmin;z-index:30}
+#dark{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,transparent 30%,#000a 100%)}
+</style></head><body>
+<header><span>🏚️ Casa Embrujada</span><span id="timer">10:00</span></header>
+<div id="stage"><div id="room"></div><div id="dark"></div></div>
+<div id="inv"></div>
+<div id="msg">Toca los objetos para investigar. Tienes 10 minutos para escapar…</div>
+<div id="dlg"><div id="dbox"></div></div>
+<div id="scare">👻</div>
+<script>
+const $=s=>document.querySelector(s);
+let S,tick,scareT,ac;
+const R=[
+ {n:'La Sala',bg:'linear-gradient(#2a1a33,#150d1c)',s:[
+  {id:'cuadro',e:'🖼️',x:18,y:38,l:'Cuadro'},
+  {id:'cofre',e:'🧰',x:50,y:74,l:'Cofre'},
+  {id:'reloj',e:'🕰️',x:50,y:30,l:'Reloj'},
+  {id:'puerta0',e:'🚪',x:84,y:48,l:'Puerta'}]},
+ {n:'El Sótano',bg:'linear-gradient(#10221f,#08110f)',s:[
+  {id:'libro',e:'📖',x:18,y:66,l:'Libro'},
+  {id:'altar',e:'🔮',x:50,y:60,l:'Altar'},
+  {id:'ataud',e:'⚰️',x:50,y:25,l:'Ataúd'},
+  {id:'puerta1',e:'🪜',x:84,y:48,l:'Escalera'}]},
+ {n:'El Ático',bg:'linear-gradient(#2b1f14,#120c07)',s:[
+  {id:'espejo',e:'🪞',x:18,y:38,l:'Espejo'},
+  {id:'muneco',e:'🧸',x:48,y:72,l:'Muñeco'},
+  {id:'tela',e:'🕸️',x:84,y:42,l:'Ventana'}]}
+];
+function audio(f,d,t='sawtooth',v=.15){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+function say(t){$('#msg').textContent=t}
+function dlg(h){$('#dbox').innerHTML=h+'<br><button class="b" onclick="closeD()">Cerrar</button>';$('#dlg').style.display='flex'}
+function closeD(){$('#dlg').style.display='none'}
+function scare(){const e=$('#scare');e.style.display='flex';audio(90,.5,'sawtooth',.3);audio(1200,.3,'square',.1);setTimeout(()=>e.style.display='none',380);say('¿Qué fue eso…? 😰')}
+function nextScare(){scareT=setTimeout(()=>{scare();nextScare()},20000+Math.random()*20000)}
+function give(i){if(!S.inv.includes(i)){S.inv.push(i);audio(660,.2,'sine');drawInv()}}
+function has(i){return S.inv.includes(i)}
+function drawInv(){$('#inv').innerHTML='<span>Inventario:</span>'+S.inv.join(' ')}
+function draw(){const r=R[S.room],st=$('#stage');st.style.background=r.bg;
+ st.querySelectorAll('.spot').forEach(e=>e.remove());
+ $('#room').textContent=r.n;
+ r.s.forEach(o=>{const b=document.createElement('button');b.className='spot';b.style.left=o.x+'%';b.style.top=o.y+'%';b.innerHTML=o.e+'<small>'+o.l+'</small>';b.onclick=()=>act(o.id);st.appendChild(b)})}
+function code(msg,ok){dlg(msg+'<br><input id="cd" maxlength="3" inputmode="numeric"><br><button class="b" onclick="chk()">Probar</button>');window.chk=()=>{if($('#cd').value===ok.c){closeD();ok.f()}else{audio(120,.3);say('Nada ocurre. Código incorrecto.')}}}
+const M=['🌑','🌒','🌓','🌕'];
+function altar(){
+ const w=()=>{dlg('Tres fases lunares brillan en el altar.<br>'+S.m.map((m,i)=>`<button class="moon" onclick="mv(${i})">${M[m]}</button>`).join('')+'<br>')};
+ window.mv=i=>{S.m[i]=(S.m[i]+1)%4;audio(300+i*100,.15,'sine');if(S.m.join()==='0,2,3'){closeD();S.f.altar=1;give('🧿');audio(880,.6,'sine');say('El altar se abre y aparece un amuleto 🧿');return}w()};w()}
+function act(id){
+ audio(200,.1,'triangle',.08);
+ if(id==='cuadro')dlg('Un retrato de la familia maldita. Alguien garabateó debajo:<br><i>“Cuenta lo que ves en esta casa: 3 velas 🕯️, 1 calavera 💀 y 7 murciélagos 🦇.”</i>');
+ else if(id==='reloj')dlg('El reloj marcó las 12 hace un siglo. Dentro hay una nota: <i>“El cofre guarda lo que la casa quiere ocultar.”</i>');
+ else if(id==='cofre'){
+  if(S.f.cofre)say('El cofre está vacío.');
+  else code('Un candado de 3 dígitos. ¿Cuál es el código?',{c:'317',f:()=>{S.f.cofre=1;give('🗝️');say('¡Click! Encontraste una llave oxidada 🗝️')}})}
+ else if(id==='puerta0'){
+  if(has('🗝️')){say('La puerta chirría… bajas al sótano.');audio(80,.8);S.room=1;draw()}
+  else dlg('Está cerrada con llave. 🔒')}
+ else if(id==='libro')dlg('Un libro mohoso con una anotación:<br><i>“Primero la noche sin luz, luego media luna, y al final la luna llena.”</i>');
+ else if(id==='altar'){if(S.f.altar)say('El altar ya está vacío.');else altar()}
+ else if(id==='ataud'){scare();say('El ataúd estaba vacío… ¿o no?')}
+ else if(id==='puerta1'){
+  if(has('🧿')){say('El ojo brilla y la trampilla se abre. Subes al ático…');audio(80,.8);S.room=2;draw()}
+  else dlg('Una trampilla con un hueco en forma de ojo. Necesitas algo para abrirla… 👁️')}
+ else if(id==='espejo')dlg('En el espejo se lee: <i>“825”</i>. Pero los espejos invierten todo lo que reflejan…')
+ else if(id==='muneco'){
+  if(S.f.muneco)say('El muñeco ya no guarda nada más.');
+  else code('El muñeco sostiene una cajita con candado de 3 dígitos. 🧸',{c:'528',f:()=>{S.f.muneco=1;give('✂️');say('Dentro había unas tijeras viejas ✂️')}})}
+ else if(id==='tela'){
+  if(has('✂️'))win();
+  else dlg('Una telaraña gigante tapa la ventana, la única salida. Es demasiado gruesa para romperla a mano. 🕸️')}
+}
+function win(){clearInterval(tick);clearTimeout(scareT);audio(523,.4,'sine');setTimeout(()=>audio(784,.6,'sine'),250);
+ const left=$('#timer').textContent;
+ dlg('<div style="font-size:60px">🎃</div><h2>¡Escapaste!</h2>Saliste con '+left+' de sobra.<br><button class="b" onclick="start()">Jugar de nuevo</button>')}
+function lose(){clearInterval(tick);clearTimeout(scareT);scare();setTimeout(()=>dlg('<div style="font-size:60px">💀</div><h2>Se acabó el tiempo</h2>La casa te atrapó para siempre.<br><button class="b" onclick="start()">Reintentar</button>'),450)}
+function start(){closeD();clearInterval(tick);clearTimeout(scareT);S={room:0,inv:[],f:{},m:[0,0,0],t:600};drawInv();draw();say('Toca los objetos para investigar. Tienes 10 minutos para escapar…');
+ const up=()=>{const m=Math.floor(S.t/60),s=S.t%60;$('#timer').textContent=m+':'+String(s).padStart(2,'0')};up();
+ tick=setInterval(()=>{S.t--;up();if(S.t<=0)lose()},1000);nextScare()}
+start();
+</script></body></html>
